@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="enrol/mercadopagosub/db" VERSION="20260831" COMMENT="Tables for the Mercado Pago Subscriptions enrolment plugin."
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
+>
+  <TABLES>
+
+    <TABLE NAME="enrol_mercadopagosub_sub" COMMENT="One row per Mercado Pago preapproval. Rows are never deleted: a subscriber who leaves and returns gets a new row, mirroring the platform, which does not allow deletion either.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="enrolid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Enrolment instance this subscription pays for."/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="preapprovalid" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false" COMMENT="Mercado Pago preapproval id, 32 hexadecimal characters in practice."/>
+        <FIELD NAME="externalreference" TYPE="char" LENGTH="100" NOTNULL="true" SEQUENCE="false" COMMENT="The only field that travels to Mercado Pago and comes back, so it is the sole correlation key. The platform accepts at least 200 characters."/>
+        <FIELD NAME="payeremail" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="The address the subscription was created with. Mercado Pago returns this field as an empty string and never populates it, so this column is the only record of it."/>
+        <FIELD NAME="state" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="pending" SEQUENCE="false" COMMENT="Local lifecycle: pending, trialing, active, overdue, ended."/>
+        <FIELD NAME="endreason" TYPE="char" LENGTH="30" NOTNULL="false" SEQUENCE="false" COMMENT="Set when state becomes ended: abandoned, unpaid, cancelled_by_user, cancelled_by_admin, cancelled_by_mp."/>
+        <FIELD NAME="mpstatus" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="pending" SEQUENCE="false" COMMENT="Last known remote status: pending, authorized, paused, cancelled."/>
+        <FIELD NAME="amount" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="currency" TYPE="char" LENGTH="3" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="frequency" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="1" SEQUENCE="false"/>
+        <FIELD NAME="frequencytype" TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="months" SEQUENCE="false" COMMENT="Only days and months are accepted by the platform."/>
+        <FIELD NAME="trialfrequency" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="trialfrequencytype" TYPE="char" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="nextpaymentdate" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Anchored to the moment of authorisation, not of creation. Drives timeend on the user enrolment."/>
+        <FIELD NAME="enddate" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Set only for bounded subscriptions."/>
+        <FIELD NAME="payerid" TYPE="char" LENGTH="64" NOTNULL="false" SEQUENCE="false" COMMENT="Assigned by Mercado Pago at creation, derived from payeremail. Immutable."/>
+        <FIELD NAME="paymentmethodid" TYPE="char" LENGTH="64" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="dunningstage" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="0 none, 1 first notice sent, 2 second notice sent."/>
+        <FIELD NAME="dunningsince" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="When the subscription first went overdue. The notice schedule counts from here."/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timeauthorized" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timeended" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timesynced" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Last successful read from the API. The reconciliation task orders by this."/>
+        <FIELD NAME="extras" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="JSON for anything that does not warrant a column."/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="enrolid" TYPE="foreign" FIELDS="enrolid" REFTABLE="enrol" REFFIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="preapprovalid" TYPE="unique" FIELDS="preapprovalid"/>
+        <KEY NAME="externalreference" TYPE="unique" FIELDS="externalreference"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="enrolid-userid-state" UNIQUE="false" FIELDS="enrolid, userid, state"/>
+        <INDEX NAME="state-nextpaymentdate" UNIQUE="false" FIELDS="state, nextpaymentdate"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="enrol_mercadopagosub_payment" COMMENT="One row per authorized payment, read from /authorized_payments/search. Never written from a webhook body.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="subid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="mppaymentid" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="status" TYPE="char" LENGTH="30" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="statusdetail" TYPE="char" LENGTH="100" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="amount" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="currency" TYPE="char" LENGTH="3" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="debitdate" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="periodstart" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Enrolment period this payment opened. Kept for audit: it is what the subscriber paid for."/>
+        <FIELD NAME="periodend" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="payload" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Redacted API response, capped. Never raw card or identification data."/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="subid" TYPE="foreign" FIELDS="subid" REFTABLE="enrol_mercadopagosub_sub" REFFIELDS="id"/>
+        <KEY NAME="mppaymentid" TYPE="unique" FIELDS="mppaymentid"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="subid-debitdate" UNIQUE="false" FIELDS="subid, debitdate"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="enrol_mercadopagosub_event" COMMENT="Raw webhook deliveries. The endpoint writes here and returns 200; a scheduled task does the work.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="topic" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false" COMMENT="subscription_preapproval, subscription_authorized_payment, subscription_preapproval_plan, payment."/>
+        <FIELD NAME="resourceid" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false" COMMENT="The id the notification points at. May belong to another plugin sharing the application: those are logged, answered 200 and ignored."/>
+        <FIELD NAME="notificationid" TYPE="char" LENGTH="64" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="requestid" TYPE="char" LENGTH="64" NOTNULL="false" SEQUENCE="false" COMMENT="x-request-id header, part of the signature manifest."/>
+        <FIELD NAME="signaturestatus" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="absent" SEQUENCE="false" COMMENT="verified, failed or absent. Enforcement fails closed."/>
+        <FIELD NAME="processstatus" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="queued" SEQUENCE="false" COMMENT="queued, processed, ignored, failed."/>
+        <FIELD NAME="attempts" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="receivedat" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="processedat" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="lasterror" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="payload" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="Body as received, redacted and capped. Treated as a signal, never as a source of truth."/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="processstatus-receivedat" UNIQUE="false" FIELDS="processstatus, receivedat"/>
+        <INDEX NAME="topic-resourceid" UNIQUE="false" FIELDS="topic, resourceid"/>
+        <INDEX NAME="notificationid" UNIQUE="false" FIELDS="notificationid"/>
+      </INDEXES>
+    </TABLE>
+
+  </TABLES>
+</XMLDB>
